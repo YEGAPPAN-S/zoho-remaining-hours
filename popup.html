@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; style-src 'self';">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Zoho Remaining Work Time</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>Remaining Work Time</h1>
+      <p class="sub">Target: <strong>8:00:00</strong></p>
+    </header>
+
+    <section id="status" class="card">
+      <div id="urlRow" class="row small dim"></div>
+      <div id="workedRow" class="row">
+        <span class="label">Worked today</span>
+        <span id="workedVal" class="value">—</span>
+      </div>
+      <div id="remainingRow" class="row">
+        <span class="label">Remaining</span>
+        <span id="remainingVal" class="value big">—</span>
+      </div>
+      <div id="noteRow" class="row small dim"></div>
+      <div id="errorRow" class="error hidden"></div>
+    </section>
+
+    <footer class="actions">
+      <button id="refreshBtn" type="button" title="Re-read from the page">Refresh</button>
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

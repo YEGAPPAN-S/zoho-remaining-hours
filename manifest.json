@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Zoho Remaining Work Time",
+  "version": "1.0.0",
+  "description": "Reads today's worked hours on Zoho People and shows the remaining time to reach 8 hours.",
+  "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["https://people.zoho.in/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Show remaining time"
+  }
+}
