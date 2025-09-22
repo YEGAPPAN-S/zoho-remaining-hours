@@ -11,27 +11,62 @@
   <main class="wrap">
     <header>
       <h1>Remaining Work Time</h1>
-      <p class="sub">Target: <strong>8:00:00</strong></p>
+      <p class="sub">Target: <strong id="targetDisplay">08:00:00</strong></p>
     </header>
 
     <section id="status" class="card">
       <div id="urlRow" class="row small dim"></div>
+
       <div id="workedRow" class="row">
         <span class="label">Worked today</span>
         <span id="workedVal" class="value">—</span>
       </div>
+
+      <div id="relieveRow" class="row">
+        <span class="label">Relieving time</span>
+        <span id="relieveVal" class="value">—</span>
+      </div>
+
       <div id="remainingRow" class="row">
         <span class="label">Remaining</span>
         <span id="remainingVal" class="value big">—</span>
       </div>
+
+      <div id="overtimeRow" class="row hidden">
+        <span class="label">Overtime</span>
+        <span id="overtimeVal" class="value big">+00:00:00</span>
+      </div>
+
+      <div id="breakRow" class="row">
+        <span class="label">Break total</span>
+        <span id="breakVal" class="value small mono">—</span>
+      </div>
+
+      <div id="punchesRow" class="row">
+        <span class="label">Punches</span>
+        <span id="punchesVal" class="value small mono">—</span>
+      </div>
+
+      <details class="week">
+        <summary>Weekly summary</summary>
+        <div id="weekTable" class="week-table"></div>
+        <div id="weekTotals" class="week-totals"></div>
+      </details>
+
       <div id="noteRow" class="row small dim"></div>
       <div id="errorRow" class="error hidden"></div>
     </section>
 
-    <footer class="actions">
-      <button id="refreshBtn" type="button" title="Re-read from the page">Refresh</button>
-    </footer>
+    <section class="card settings">
+      <h2>Settings</h2>
+      <div class="form-row">
+        <label for="targetInput">Daily target (HH:MM)</label>
+        <input id="targetInput" type="time" step="60" />
+        <button id="saveTargetBtn" type="button">Save</button>
+      </div>
+    </section>
   </main>
+
   <script src="popup.js"></script>
 </body>
 </html>
