@@ -1,20 +1,22 @@
 {
   "manifest_version": 3,
   "name": "Zoho Remaining Work Time",
-  "version": "3.0.0",
-  "description": "Reads today's worked hours on Zoho People and shows remaining time to reach your target. Weekly summary, punches, auto-refresh, and badge updates.",
+  "version": "4.0.0",
+  "description": "Background timer for Zoho People attendance. Fetches worked hours, punches, and weekly summary directly from the Zoho API — no need to open the page.",
   "icons": {
     "16": "icon.png",
     "32": "icon.png",
     "48": "icon.png",
     "128": "icon.png"
   },
-  "permissions": ["activeTab", "scripting", "storage", "alarms", "tabs", "contextMenus"],
+  "permissions": ["storage", "alarms", "cookies"],
   "host_permissions": [
-    "https://people.zoho.in/*"
+    "https://people.zoho.in/*",
+    "https://people.zoho.com/*"
   ],
   "action": {
-    "default_title": "Open Zoho People Summary"
+    "default_title": "Zoho Remaining Work Time",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "service_worker.js"
