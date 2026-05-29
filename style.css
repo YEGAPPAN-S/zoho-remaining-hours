@@ -24,6 +24,7 @@
   --primary-soft: #e8eaf3;
   --secondary: #0088FF;     /* vivid blue */
   --secondary-soft: #e3f2ff;
+  --pulse-rgb: 0, 136, 255; /* used by @keyframes pulse — overridden in dark */
 
   /* States */
   --warn: #b8770a;
@@ -176,13 +177,13 @@ body {
   width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--secondary);
-  box-shadow: 0 0 0 0 rgba(0, 136, 255, .55);
+  box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), .55);
   animation: pulse 1.6s ease-out infinite;
 }
 @keyframes pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(0,136,255,.55); }
-  70%  { box-shadow: 0 0 0 7px rgba(0,136,255,0); }
-  100% { box-shadow: 0 0 0 0 rgba(0,136,255,0); }
+  0%   { box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), .55); }
+  70%  { box-shadow: 0 0 0 7px rgba(var(--pulse-rgb), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--pulse-rgb), 0); }
 }
 
 .hero-time {
@@ -530,11 +531,7 @@ body {
   --danger-soft: #2a1414;
   --danger-line: #6b2a2a;
   --success: #34d399;
+
+  --pulse-rgb: 58, 163, 255;   /* lifted blue, same @keyframes picks this up */
 }
 [data-theme="dark"] .primary-btn:hover { background: #2a366f; }
-[data-theme="dark"] .live-dot { box-shadow: 0 0 0 0 rgba(58, 163, 255, .55); }
-[data-theme="dark"] @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(58,163,255,.55); }
-  70% { box-shadow: 0 0 0 7px rgba(58,163,255,0); }
-  100% { box-shadow: 0 0 0 0 rgba(58,163,255,0); }
-}
