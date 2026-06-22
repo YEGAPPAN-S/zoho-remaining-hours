@@ -1,25 +1,37 @@
 // ============================
-// Zoho Remaining Work Time — background fetcher
+// Zoho People Time Tracker - background fetcher
 // No tab open required. Reads attendance directly via Zoho's API
 // using the logged-in session cookies.
 // ============================
 
-const COMPANY = "humbletreecloud";          // Zoho People subdomain segment
-const ZOHO_HOSTS = [                         // try .in first, fall back to .com
-  "https://people.zoho.in",
-  "https://people.zoho.com"
-];
-const ENDPOINT_PATH = `/${COMPANY}/AttendanceViewAction.zp`;
-const USER_ENDPOINT_PATH = `/${COMPANY}/commonAction/getOrgUserListNew`;
 const REFRESH_MINUTES = 1;                   // background poll cadence
 const EMPLOYEE_REFRESH_HOURS = 6;             // user info rarely changes
 const DEFAULT_TARGET_SECONDS = 8 * 3600;
 
+// Endpoint paths depend on company segment, resolved from storage at fetch time.
+function attendancePath(company) { return `/${company}/AttendanceViewAction.zp`; }
+function userListPath(company)   { return `/${company}/commonAction/getOrgUserListNew`; }
+
+// Returns { host, company } from storage, or null if user hasn't set up yet.
+async function getZohoConfig() {
+  const { setupComplete, zohoHost, company } = await chrome.storage.sync.get({
+    setupComplete: false,
+    zohoHost: "https://people.zoho.in",
+    company: ""
+  });
+  if (!setupComplete || !company) return null;
+  return { host: zohoHost, company };
+}
+
 // ============================
 // Install / startup
 // ============================
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   chrome.alarms.create("zohoRefresh", { periodInMinutes: REFRESH_MINUTES });
+  if (reason === "install") {
+    // First install - open the options page so user can configure
+    try { await chrome.runtime.openOptionsPage(); } catch {}
+  }
   refreshAndBroadcast().catch(() => {});
 });
 chrome.runtime.onStartup.addListener(() => {
@@ -29,6 +41,16 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "zohoRefresh") refreshAndBroadcast().catch(() => {});
+});
+
+// React instantly when any setting that affects the badge changes,
+// so flipping "Time left ↔ Time worked" in the popup updates the toolbar badge right away.
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  if (area !== "sync") return;
+  const relevant = ["heroDisplay", "targetSeconds", "breakMath", "saturdayWorking", "halfDay"];
+  if (!relevant.some(k => k in changes)) return;
+  const { zohoSnapshot } = await chrome.storage.local.get(["zohoSnapshot"]);
+  if (zohoSnapshot) await applyBadge(zohoSnapshot);
 });
 
 // Popup talks to us via messages
@@ -44,6 +66,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     (async () => {
       const snap = await refreshAndBroadcast();
       sendResponse({ ok: !!snap, snapshot: snap });
+    })();
+    return true;
+  }
+  if (msg?.type === "openOptions") {
+    (async () => {
+      try { await chrome.runtime.openOptionsPage(); sendResponse({ ok: true }); }
+      catch (e) { sendResponse({ ok: false, error: e?.message }); }
     })();
     return true;
   }
@@ -64,57 +93,40 @@ async function getCsrfFor(host) {
 // ============================
 // Fetch + parse
 // ============================
-async function fetchAttendance() {
-  let lastErr = null;
-  for (const host of ZOHO_HOSTS) {
-    try {
-      const csrf = await getCsrfFor(host);
-      if (!csrf) { lastErr = { code: "NO_CSRF", host }; continue; }
+async function fetchAttendance(cfg, view = "week") {
+  const host = cfg.host;
+  const csrf = await getCsrfFor(host);
+  if (!csrf) throw { code: "NO_CSRF", host };
 
-      const body = new URLSearchParams({
-        mode: "getAttList",
-        conreqcsr: csrf,
-        loadToday: "false",
-        view: "week",
-        preMonth: "0",
-        weekStarts: "1"
-      }).toString();
+  const body = new URLSearchParams({
+    mode: "getAttList",
+    conreqcsr: csrf,
+    loadToday: "false",
+    view,
+    preMonth: "0",
+    weekStarts: "1"
+  }).toString();
 
-      const r = await fetch(host + ENDPOINT_PATH, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-ZCSRF-TOKEN": "conreqcsr=" + csrf
-        },
-        body
-      });
+  const r = await fetch(host + attendancePath(cfg.company), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "X-ZCSRF-TOKEN": "conreqcsr=" + csrf
+    },
+    body
+  });
 
-      if (r.status === 401 || r.status === 403) {
-        lastErr = { code: "AUTH", host, status: r.status };
-        continue;
-      }
-      if (!r.ok) {
-        lastErr = { code: "HTTP", host, status: r.status };
-        continue;
-      }
+  if (r.status === 401 || r.status === 403) throw { code: "AUTH", host, status: r.status };
+  if (!r.ok) throw { code: "HTTP", host, status: r.status };
 
-      const text = await r.text();
-      let json;
-      try { json = JSON.parse(text); }
-      catch { lastErr = { code: "PARSE", host }; continue; }
+  const text = await r.text();
+  let json;
+  try { json = JSON.parse(text); }
+  catch { throw { code: "PARSE", host }; }
 
-      // If Zoho returned a login-redirect HTML disguised as 200, dayList is missing
-      if (!json || !json.dayList) {
-        lastErr = { code: "NO_DAYLIST", host };
-        continue;
-      }
-      return { host, json };
-    } catch (e) {
-      lastErr = { code: "NETWORK", host, message: e.message };
-    }
-  }
-  throw lastErr || { code: "UNKNOWN" };
+  if (!json || !json.dayList) throw { code: "NO_DAYLIST", host };
+  return { host, json };
 }
 
 // ============================
@@ -186,6 +198,29 @@ function activeSessionExtraSecs(pairs, nowMin) {
     }
   }
   return { extra: 0, openSinceMin: null };
+}
+
+// Sum permission seconds for the current calendar month across all days in the response.
+// Tries view=month first; falls back to the week we already fetched if that errors.
+async function fetchMonthlyPermissionUsed(cfg, weekJson) {
+  const now = new Date();
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  function sumPermFromDayList(days) {
+    let total = 0;
+    for (const d of Object.values(days || {})) {
+      if (d?.attDate && d.attDate.startsWith(monthPrefix)) {
+        total += (d.totalPermissionInSecs || 0);
+      }
+    }
+    return total;
+  }
+  try {
+    const { json } = await fetchAttendance(cfg, "month");
+    return sumPermFromDayList(json?.dayList);
+  } catch {
+    // Fall back to whatever week we already have
+    return sumPermFromDayList(weekJson?.dayList);
+  }
 }
 
 function buildSnapshot(json) {
@@ -272,40 +307,105 @@ async function getCachedSnapshot() {
 }
 
 function setBadgeFromRemaining(remainingSeconds) {
-  const hrsRounded = Math.max(0, Math.ceil(remainingSeconds / 3600));
   let color = "#5bbad5";
   if (remainingSeconds <= 0) color = "#3ddc97";
   else if (remainingSeconds <= 30 * 60) color = "#f0b429";
   chrome.action.setBadgeBackgroundColor({ color });
-  chrome.action.setBadgeText({ text: remainingSeconds > 0 ? `${hrsRounded}h` : "OK" });
+  chrome.action.setBadgeText({ text: remainingSeconds > 0 ? formatBadgeTime(remainingSeconds) : "OK" });
+}
+
+function setBadgeOff() {
+  chrome.action.setBadgeBackgroundColor({ color: "#8a95a7" });
+  chrome.action.setBadgeText({ text: "Off" });
+}
+
+function setBadgeFromWorked(workedSeconds, targetSeconds) {
+  const reached = targetSeconds > 0 && workedSeconds >= targetSeconds;
+  chrome.action.setBadgeBackgroundColor({ color: reached ? "#3ddc97" : "#5bbad5" });
+  chrome.action.setBadgeText({ text: workedSeconds > 0 ? formatBadgeTime(workedSeconds) : "0m" });
+}
+
+// Apply the badge based on the cached snapshot + current user settings.
+// Called after a fresh fetch AND whenever a relevant setting changes (via storage listener).
+async function applyBadge(snap) {
+  if (!snap) return;
+  const { targetSeconds, breakMath, saturdayWorking, heroDisplay } = await chrome.storage.sync.get({
+    targetSeconds: DEFAULT_TARGET_SECONDS,
+    breakMath: "exclude",
+    saturdayWorking: false,
+    heroDisplay: "remaining"
+  });
+  if (isTodayLeaveDay(snap, saturdayWorking)) { setBadgeOff(); return; }
+
+  let liveWorked = liveWorkedFromSnapshot(snap);
+  if (breakMath === "include") liveWorked += snap.breakTotalSeconds || 0;
+
+  if (heroDisplay === "worked") {
+    setBadgeFromWorked(liveWorked, targetSeconds);
+  } else {
+    const remaining = Math.max(0, targetSeconds - liveWorked);
+    setBadgeFromRemaining(remaining);
+  }
+}
+
+// True if today is a weekend (with Sat-working honored), holiday, or leave per Zoho status
+function isTodayLeaveDay(snap, saturdayWorking) {
+  const todayDay = (snap?.week || []).find(d => d?.isToday);
+  if (!todayDay) return false;
+  const status = (todayDay.status || "").toLowerCase();
+  if (status.includes("holiday") || status.includes("leave")) return true;
+  if (!todayDay.attDate) return !!todayDay.isWeekend;
+  const dow = new Date(todayDay.attDate + "T00:00:00").getDay();
+  if (dow === 0) return true;
+  if (dow === 6) return !saturdayWorking;
+  return false;
+}
+
+// Badge text is ~4 chars wide. Format compactly:
+// >= 1h  -> "H:MM" (e.g. "1:35", "7:25")
+// <  1h  -> "Mm"   (e.g. "45m", "5m")
+function formatBadgeTime(sec) {
+  const totalMin = Math.max(0, Math.ceil(sec / 60));
+  if (totalMin < 60) return `${totalMin}m`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}:${String(m).padStart(2, "0")}`;
 }
 
 async function refreshAndBroadcast() {
+  const cfg = await getZohoConfig();
+  if (!cfg) {
+    // Not yet configured - show a hint on the badge and bail
+    chrome.action.setBadgeBackgroundColor({ color: "#0088FF" });
+    chrome.action.setBadgeText({ text: "Set" });
+    await setError({ code: "NOT_CONFIGURED" });
+    return null;
+  }
+
   try {
-    const { json } = await fetchAttendance();
+    const { json } = await fetchAttendance(cfg);
     const snap = buildSnapshot(json);
+
+    // Monthly permission used - fetch month view, sum totalPermissionInSecs over current calendar month
+    snap.monthlyPermissionUsed = await fetchMonthlyPermissionUsed(cfg, json);
 
     // Employee info: try Org endpoint with eNo, fall back to fName from attendance
     const fName = json?.userDetails?.fName || null;
     const eNo = json?.userDetails?.eNo || null;
-    const empFromOrg = await maybeRefreshEmployee(eNo);
+    const empFromOrg = await maybeRefreshEmployee(eNo, cfg);
     snap.employee = {
       name: empFromOrg?.name || fName || "Employee",
       designation: empFromOrg?.designation || null,
       department: empFromOrg?.department || null,
       location: empFromOrg?.location || null,
-      empId: empFromOrg?.empId || json?.userDetails?.eId || null
+      empId: empFromOrg?.empId || json?.userDetails?.eId || null,
+      photoUrl: empFromOrg?.photoUrl || null,
+      photoUrls: empFromOrg?.photoUrls || []
     };
 
     await setSnapshot(snap);
 
-    const { targetSeconds = DEFAULT_TARGET_SECONDS } = await chrome.storage.sync.get({
-      targetSeconds: DEFAULT_TARGET_SECONDS
-    });
-    // Project worked forward if there's an open session
-    const liveWorked = liveWorkedFromSnapshot(snap);
-    const remaining = Math.max(0, targetSeconds - liveWorked);
-    setBadgeFromRemaining(remaining);
+    await applyBadge(snap);
 
     // Tell popup (if open) to re-render
     chrome.runtime.sendMessage({ type: "snapshotUpdated" }).catch(() => {});
@@ -322,68 +422,103 @@ async function refreshAndBroadcast() {
 // ============================
 // Employee info (Org user list)
 // ============================
-async function maybeRefreshEmployee(eNo) {
+async function maybeRefreshEmployee(eNo, cfg) {
   const { zohoEmployee, zohoEmployeeAt } = await chrome.storage.local.get([
     "zohoEmployee", "zohoEmployeeAt"
   ]);
-  // Math.max guards against negative age if the system clock was moved backwards
   const ageHours = zohoEmployeeAt ? Math.max(0, (Date.now() - zohoEmployeeAt) / 3.6e6) : Infinity;
-  if (zohoEmployee && ageHours < EMPLOYEE_REFRESH_HOURS) return zohoEmployee;
+  // Any cached record with a name is usable - photoUrls can be reconstructed on the fly
+  const hasUsableCache = !!(zohoEmployee?.name);
 
-  const fresh = await fetchEmployee(eNo);
+  if (hasUsableCache && ageHours < EMPLOYEE_REFRESH_HOURS) {
+    return ensurePhotoUrls(zohoEmployee, cfg);
+  }
+
+  const fresh = await fetchEmployee(eNo, cfg);
   if (fresh) {
     await chrome.storage.local.set({ zohoEmployee: fresh, zohoEmployeeAt: Date.now() });
     return fresh;
   }
-  return zohoEmployee || null;  // fall back to stale cache if fetch fails
+  // Fresh fetch failed - fall back to whatever we have rather than losing data entirely
+  return hasUsableCache ? ensurePhotoUrls(zohoEmployee, cfg) : null;
 }
 
-async function fetchEmployee(eNo) {
-  if (!eNo) return null;   // userIds is required — no eNo means we can't ask
-  for (const host of ZOHO_HOSTS) {
-    const csrf = await getCsrfFor(host);
-    if (!csrf) continue;
-    try {
-      const body = new URLSearchParams({
-        isInit: "false",
-        conreqcsr: csrf,
-        userIds: JSON.stringify([eNo])
-      }).toString();
-
-      const r = await fetch(host + USER_ENDPOINT_PATH, {
-        method: "POST",
-        credentials: "include",
-        referrer: host + "/" + COMPANY + "/zp",
-        referrerPolicy: "strict-origin-when-cross-origin",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-ZCSRF-TOKEN": "conreqcsr=" + csrf,
-          "X-Requested-With": "XMLHttpRequest",
-          "Accept": "application/json, text/javascript, */*; q=0.01"
-        },
-        body
-      });
-      if (!r.ok) continue;
-      const j = await r.json();
-      if (!j?.success || !j?.response?.userList?.length) continue;
-
-      const row = j.response.userList[0];
-      // Row format: ["", "", firstName, lastName, empCode, empNo, zuid, ?, email, ...]
-      const firstName = row[2] || "";
-      const lastName  = row[3] || "";
-      const name = (firstName + " " + lastName).trim() || null;
-      return {
-        name,
-        empId: row[4] || null,
-        email: row[8] || null,
-        designation: j.response.desiNameList?.[0] || null,
-        department: j.response.deptNameList?.[0] || null,
-        location:   j.response.locNameList?.[0] || null,
-        role:       j.response.roleNameList?.[0] || null
-      };
-    } catch { /* try next host */ }
+// Build the avatar URL cascade from the bits we have. Re-runs cheaply on every refresh
+// so old-schema caches (single photoUrl, missing photoUrls) get migrated transparently.
+function buildPhotoUrls(emp, cfg) {
+  const urls = [];
+  const host = cfg?.host;
+  const company = cfg?.company;
+  if (emp?.eNo && host && company) {
+    urls.push(`${host}/${company}/viewPhoto?erecno=${emp.eNo}&mode=2&avatarid=14`);
+    urls.push(`${host}/${company}/viewPhoto?erecno=${emp.eNo}`);
   }
-  return null;
+  if (emp?.zuid && host) {
+    const contactsHost = host.replace("people.zoho.", "contacts.zoho.");
+    urls.push(`${contactsHost}/file?ID=${emp.zuid}&fs=thumb`);
+  }
+  return urls;
+}
+
+function ensurePhotoUrls(emp, cfg) {
+  if (!emp) return emp;
+  if (Array.isArray(emp.photoUrls) && emp.photoUrls.length) return emp;
+  return { ...emp, photoUrls: buildPhotoUrls(emp, cfg) };
+}
+
+async function fetchEmployee(eNo, cfg) {
+  if (!eNo || !cfg) return null;
+  const host = cfg.host;
+  const csrf = await getCsrfFor(host);
+  if (!csrf) return null;
+  try {
+    const body = new URLSearchParams({
+      isInit: "false",
+      conreqcsr: csrf,
+      userIds: JSON.stringify([eNo])
+    }).toString();
+
+    const r = await fetch(host + userListPath(cfg.company), {
+      method: "POST",
+      credentials: "include",
+      referrer: host + "/" + cfg.company + "/zp",
+      referrerPolicy: "strict-origin-when-cross-origin",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-ZCSRF-TOKEN": "conreqcsr=" + csrf,
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json, text/javascript, */*; q=0.01"
+      },
+      body
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j?.success || !j?.response?.userList?.length) return null;
+
+    const row = j.response.userList[0];
+    // Row format: ["", "", firstName, lastName, empCode, empNo, zuid, ?, email, ...]
+    const firstName = row[2] || "";
+    const lastName  = row[3] || "";
+    const name = (firstName + " " + lastName).trim() || null;
+    const eNoRow = row[5] || null;            // internal record number (used by viewPhoto erecno)
+    const zuid   = row[6] || null;            // global Zoho user ID (used by contacts.zoho)
+
+    const photoUrls = buildPhotoUrls({ eNo: eNoRow, zuid }, cfg);
+
+    return {
+      name,
+      empId: row[4] || null,
+      eNo: eNoRow,
+      zuid,
+      photoUrls,
+      photoUrl: photoUrls[0] || null,        // legacy field, points at the first candidate
+      email: row[8] || null,
+      designation: j.response.desiNameList?.[0] || null,
+      department: j.response.deptNameList?.[0] || null,
+      location:   j.response.locNameList?.[0] || null,
+      role:       j.response.roleNameList?.[0] || null
+    };
+  } catch { return null; }
 }
 
 // Worked seconds projected to *now* (handles open session ticking forward)

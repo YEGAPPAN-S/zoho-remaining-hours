@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; style-src 'self';">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Zoho Remaining Work Time</title>
+  <title>Zoho People Time Tracker</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <!-- Icon library (FA-style outlines, single sprite — referenced via <use href="#id">) -->
+  <!-- Icon library (FA-style outlines, single sprite - referenced via <use href="#id">) -->
   <svg class="icon-sprite" aria-hidden="true">
     <defs>
       <symbol id="i-refresh" viewBox="0 0 24 24">
@@ -77,6 +77,9 @@
           <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7.1 4.7l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
         </g>
       </symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24">
+        <path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/>
+      </symbol>
       <symbol id="i-external" viewBox="0 0 24 24">
         <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 3h6v6M10 14L21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>
@@ -88,28 +91,31 @@
   <main class="app">
     <!-- Employee header -->
     <header class="emp-header" id="empHeader">
-      <div class="emp-avatar" id="empAvatar">—</div>
+      <div class="emp-avatar" id="empAvatar">-</div>
       <div class="emp-meta">
         <div class="emp-name" id="empName">Loading…</div>
-        <div class="emp-role" id="empRole">—</div>
+        <div class="emp-role" id="empRole">-</div>
       </div>
       <div class="header-actions">
-        <button id="themeBtn" class="icon-btn" title="Toggle theme">
-          <svg class="ico" id="themeIco"><use href="#i-moon"></use></svg>
+        <button id="themeBtn" class="icon-btn" title="Toggle light / dark theme" aria-label="Toggle theme">
+          <svg class="ico" id="themeIco" aria-hidden="true"><use href="#i-moon"></use></svg>
         </button>
-        <button id="refreshBtn" class="icon-btn" title="Refresh">
-          <svg class="ico"><use href="#i-refresh"></use></svg>
+        <button id="refreshBtn" class="icon-btn" title="Refresh now" aria-label="Refresh">
+          <svg class="ico" aria-hidden="true"><use href="#i-refresh"></use></svg>
         </button>
+        <a id="openZohoBtn" class="icon-btn icon-btn-img" href="#" target="_blank" rel="noopener" title="Open Zoho attendance page" aria-label="Open Zoho attendance page">
+          <img src="icon.png" alt="" aria-hidden="true" />
+        </a>
       </div>
     </header>
 
-    <!-- Hero: remaining time -->
+    <!-- Hero: remaining or worked (tap the time to flip) -->
     <section class="hero" id="hero">
       <div class="hero-label">
         <span id="liveDot" class="live-dot hidden"></span>
         <span id="heroLabel">Remaining to clock out</span>
       </div>
-      <div class="hero-time" id="remainingVal">--:--:--</div>
+      <div class="hero-time" id="remainingVal" title="Tap to switch between time left and time worked">--:--:--</div>
       <div class="hero-sub">
         <span class="sub-chip">
           <svg class="ico"><use href="#i-target"></use></svg>
@@ -117,7 +123,7 @@
         </span>
         <span class="sub-chip">
           <svg class="ico"><use href="#i-clock"></use></svg>
-          ETA <strong id="relieveVal">—</strong>
+          ETA <strong id="relieveVal">-</strong>
         </span>
       </div>
       <div class="progress" aria-hidden="true">
@@ -135,14 +141,14 @@
         <span class="stat-icon"><svg class="ico"><use href="#i-briefcase"></use></svg></span>
         <div class="stat-body">
           <div class="stat-label">Worked</div>
-          <div class="stat-value" id="workedVal">—</div>
+          <div class="stat-value" id="workedVal">-</div>
         </div>
       </div>
       <div class="stat">
         <span class="stat-icon"><svg class="ico"><use href="#i-coffee"></use></svg></span>
         <div class="stat-body">
           <div class="stat-label">Break</div>
-          <div class="stat-value" id="breakVal">—</div>
+          <div class="stat-value" id="breakVal">-</div>
         </div>
       </div>
     </section>
@@ -154,9 +160,9 @@
           <svg class="ico"><use href="#i-clock"></use></svg>
           Today's Punches
         </span>
-        <span class="card-meta" id="punchCount">—</span>
+        <span class="card-meta" id="punchCount">-</span>
       </div>
-      <div id="punchesVal" class="punches">—</div>
+      <div id="punchesVal" class="punches">-</div>
     </section>
 
     <!-- Weekly summary -->
@@ -166,7 +172,10 @@
           <svg class="ico"><use href="#i-calendar"></use></svg>
           Weekly Summary
         </span>
-        <span class="card-meta">7 days</span>
+        <span class="card-title-right">
+          <span class="card-meta">7 days</span>
+          <svg class="ico card-chevron"><use href="#i-chevron"></use></svg>
+        </span>
       </summary>
       <div id="weekTable" class="week-table"></div>
       <div id="weekTotals" class="week-totals"></div>
@@ -179,7 +188,17 @@
           <svg class="ico"><use href="#i-settings"></use></svg>
           Settings
         </span>
+        <span class="card-title-right">
+          <svg class="ico card-chevron"><use href="#i-chevron"></use></svg>
+        </span>
       </summary>
+      <div class="setting-monthly hidden" id="monthlyChipRow">
+        <span class="monthly-chip" id="monthlyChip">Monthly: -</span>
+      </div>
+      <div class="monthly-warn hidden" id="monthlyWarn"></div>
+      <div class="setting-note">
+        Heads up: these don't apply in Zoho. They only change how the popup counts your remaining time - record the actual leave or permission in Zoho People.
+      </div>
       <div class="setting">
         <label for="targetSelect">Permission</label>
         <select id="targetSelect">
@@ -189,7 +208,27 @@
           <option value="02:00">2 hr permission</option>
         </select>
       </div>
-      <div class="setting-actions">
+      <div class="setting setting-stack">
+        <label class="check-row">
+          <input type="checkbox" id="halfDayToggle" />
+          <span id="halfDayLabel">Half day leave</span>
+        </label>
+        <div class="half-options" id="halfOptions">
+          <label class="radio-row">
+            <input type="radio" name="halfHalf" id="halfMorning" value="morning" />
+            <span>Morning leave</span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="halfHalf" id="halfAfternoon" value="afternoon" />
+            <span>Afternoon leave</span>
+          </label>
+        </div>
+      </div>
+      <div class="setting-actions setting-actions-split">
+        <button id="openOptionsBtn" type="button" class="ghost-btn">
+          <svg class="ico"><use href="#i-settings"></use></svg>
+          Full settings
+        </button>
         <button id="saveTargetBtn" class="primary-btn">Save</button>
       </div>
     </details>
@@ -200,9 +239,14 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <span>Built by</span>
-      <a id="devLink" href="https://yegappan.pages.dev/" target="_blank" rel="noopener">
-        Yega <svg class="ico"><use href="#i-external"></use></svg>
+      <a href="https://yegappan.pages.dev/contact?utm_source=zoho-people-extension&utm_medium=extension&utm_campaign=popup_footer&utm_content=help"
+         target="_blank" rel="noopener">Need help?</a>
+      <span class="footer-sep">·</span>
+      <span>Made with <span class="heart" aria-label="love">♥</span> by</span>
+      <a id="devLink"
+         href="https://yegappan.pages.dev/?utm_source=zoho-people-extension&utm_medium=extension&utm_campaign=popup_footer&utm_content=credit"
+         target="_blank" rel="noopener">
+        Yegappan <svg class="ico"><use href="#i-external"></use></svg>
       </a>
     </footer>
   </main>

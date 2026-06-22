@@ -1,22 +1,53 @@
 {
   "manifest_version": 3,
-  "name": "Zoho Remaining Work Time",
-  "version": "4.0.0",
-  "description": "Background timer for Zoho People attendance. Fetches worked hours, punches, and weekly summary directly from the Zoho API — no need to open the page.",
+  "name": "Zoho People Time Tracker",
+  "version": "1.0.2",
+  "description": "See remaining work hours, punches, weekly summary, and permission usage from Zoho People - live in a popup, no page needed.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "zoho-remaining-hours@yegappan.local",
+      "strict_min_version": "121.0"
+    }
+  },
   "icons": {
     "16": "icon.png",
     "32": "icon.png",
     "48": "icon.png",
     "128": "icon.png"
   },
-  "permissions": ["storage", "alarms", "cookies"],
+  "permissions": ["storage", "alarms", "cookies", "tabs"],
   "host_permissions": [
     "https://people.zoho.in/*",
-    "https://people.zoho.com/*"
+    "https://people.zoho.com/*",
+    "https://people.zoho.eu/*",
+    "https://people.zoho.com.au/*",
+    "https://people.zoho.com.cn/*",
+    "https://people.zoho.jp/*",
+    "https://people.zoho.sa/*",
+    "https://contacts.zoho.in/*",
+    "https://contacts.zoho.com/*",
+    "https://contacts.zoho.eu/*",
+    "https://contacts.zoho.com.au/*",
+    "https://contacts.zoho.com.cn/*",
+    "https://contacts.zoho.jp/*",
+    "https://contacts.zoho.sa/*"
   ],
   "action": {
-    "default_title": "Zoho Remaining Work Time",
+    "default_title": "Zoho People Time Tracker",
     "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+Z",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Open the Zoho remaining time popup"
+    }
   },
   "background": {
     "service_worker": "service_worker.js"
